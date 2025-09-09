@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR PDF to Kannada Spreadsheet Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        .drop-zone {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+        .file-input {
+            opacity: 0;
+            position: absolute;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <!-- Header -->
+            <div class="mb-8 text-center">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">📄 OCR PDF to Kannada Spreadsheet Converter</h1>
+                <p class="text-gray-600">Upload your OCR PDF, TXT, or Excel file and convert to Kannada voter list format</p>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="mb-8">
+                <div class="drop-zone p-8 rounded-lg text-center cursor-pointer" id="dropZone">
+                    <div class="mb-4">
+                        <span class="text-4xl">📁</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Upload Your File</h3>
+                    <p class="text-gray-500 mb-4">Drag and drop or click to select</p>
+                    <p class="text-sm text-gray-400">Supports: PDF (OCR), TXT, CSV, Excel (.xlsx, .xls)</p>
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.csv,.xlsx,.xls" />
+                    <button class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 mt-4" onclick="document.getElementById('fileInput').click()">
+                        Choose File
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Input Section -->
+            <div class="mb-8 border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="mr-2">✍️</span>
+                    Manual Data Input (Alternative)
+                </h3>
+                <textarea 
+                    id="manualInput" 
+                    placeholder="Paste your OCR text here. Supports various formats:
+
+Examples:
+123/A|राम कुमार|पुत्र|श्याम कुमार|M|25|ABCD1234567
+124/B|सुनीता देवी|पत्नी|राम कुमार|F|23|EFGH2345678
+
+Or tab/comma/space separated data..."
+                    class="w-full h-40 p-4 border rounded-lg font-mono text-sm resize-none"
+                ></textarea>
+                <div class="mt-4 flex space-x-3">
+                    <button onclick="processManualInput()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">
+                        ⚡ Process Data
+                    </button>
+                    <button onclick="clearInput()" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
+                        🗑️ Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Processing Status -->
+            <div id="status" class="mb-6 hidden">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                        <span id="statusText">Processing file...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error" class="mb-6 hidden">
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <span class="text-red-500 mr-2">❌</span>
+                        <span id="errorText" class="text-red-800"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="hidden">
+                <div class="border rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">📊 Processed Data</h3>
+                        <span id="rowCount" class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"></span>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="mb-4 flex flex-wrap gap-3">
+                        <button onclick="copyToClipboard()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                            <span class="mr-2">📋</span>
+                            Copy for Excel/Sheets
+                        </button>
+                        <button onclick="downloadCSV()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center">
+                            <span class="mr-2">💾</span>
+                            Download CSV
+                        </button>
+                        <button onclick="downloadExcel()" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center">
+                            <span class="mr-2">📈</span>
+                            Download Excel
+                        </button>
+                    </div>
+
+                    <!-- Data Preview -->
+                    <div class="overflow-x-auto bg-gray-50 rounded-lg p-4">
+                        <table id="dataTable" class="w-full text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-blue-100 border-b-2 border-blue-200">
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಮನೆ ಸಂಖ್ಯೆ</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಮತದಾರರ ಹೆಸರು</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಸಂಬಂಧ</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಸಂಬಂಧಿಯ ಹೆಸರು</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಲಿಂಗ</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ವಯಸ್ಸು</th>
+                                    <th class="border border-gray-300 px-3 py-2 text-left font-semibold">ಮತದಾರರ ಗುರುತಿನ ಚೀಟಿ ಸಂಖ್ಯೆ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                <h3 class="font-semibold text-yellow-800 mb-3">📝 Instructions</h3>
+                <ul class="text-sm text-yellow-700 space-y-2">
+                    <li>• <strong>PDF files:</strong> Must be OCR-processed (text-searchable), not scanned images</li>
+                    <li>• <strong>Text files:</strong> Should contain structured data with separators (|, tab, comma, space)</li>
+                    <li>• <strong>Excel/CSV:</strong> Will auto-detect columns and map to Kannada headers</li>
+                    <li>• <strong>Output:</strong> Ready-to-use format for Excel, Google Sheets, or other spreadsheet apps</li>
+                    <li>• <strong>Large files:</strong> May take a moment to process - please be patient</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const kannadaHeaders = [
+            'ಮನೆ ಸಂಖ್ಯೆ', 
+            'ಮತದಾರರ ಹೆಸರು',
+            'ಸಂಬಂಧ',
+            'ಸಂಬಂಧಿಯ ಹೆಸರು',
+            'ಲಿಂಗ',
+            'ವಯಸ್ಸು',
+            'ಮತದಾರರ ಗುರುತಿನ ಚೀಟಿ ಸಂಖ್ಯೆ'
+        ];
+
+        let processedData = [];
+
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+        async function handleFile(file) {
+            if (!file) return;
+
+            showStatus(`Processing ${file.name}...`);
+            hideError();
+
+            try {
+                let content = '';
+                const fileType = file.name.toLowerCase();
+
+                if (fileType.endsWith('.pdf')) {
+                    content = await extractPDFText(file);
+                } else if (fileType.endsWith('.txt')) {
+                    content = await readTextFile(file);
+                } else if (fileType.endsWith('.csv')) {
+                    content = await readTextFile(file);
+                } else if (fileType.endsWith('.xlsx') || fileType.endsWith('.xls')) {
+                    content = await readExcelFile(file);
+                } else {
+                    throw new Error('Unsupported file type. Please use PDF, TXT, CSV, or Excel files.');
+                }
+
+                if (!content) {
+                    throw new Error('No content extracted from file. Please check if the file is valid and contains text data.');
+                }
+
+                processData(content);
+                hideStatus();
+            } catch (error) {
+                showError(error.message);
+                hideStatus();
+            }
+        }
+
+        async function extractPDFText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const typedArray = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                        let fullText = '';
+
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += pageText + '\n';
+                        }
+
+                        resolve(fullText);
+                    } catch (error) {
+                        reject(new Error('Failed to extract text from PDF. Make sure it\'s a text-based PDF (OCR processed).'));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read PDF file.'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function readTextFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('Failed to read text file.'));
+                reader.readAsText(file);
+            });
+        }
+
+        async function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                        
+                        // Convert array data to delimited text
+                        const textContent = jsonData.map(row => row.join('|')).join('\n');
+                        resolve(textContent);
+                    } catch (error) {
+                        reject(new Error('Failed to read Excel file.'));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read Excel file.'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function processManualInput() {
+            const input = document.getElementById('manualInput').value.trim();
+            if (!input) {
+                showError('Please enter some data to process.');
+                return;
+            }
+            hideError();
+            processData(input);
+        }
+
+        function processData(content) {
+            try {
+                showStatus('Processing data...');
+                const lines = content.split('\n').filter(line => line.trim());
+                const rows = [];
+
+                lines.forEach((line, index) => {
+                    let parts = [];
+                    
+                    // Try different separators
+                    if (line.includes('|')) {
+                        parts = line.split('|');
+                    } else if (line.includes('\t')) {
+                        parts = line.split('\t');
+                    } else if (line.includes(',')) {
+                        parts = line.split(',');
+                    } else {
+                        // Try space separation
+                        parts = line.trim().split(/\s+/);
+                    }
+
+                    // Clean and filter parts
+                    parts = parts.map(p => p.trim()).filter(p => p);
+
+                    if (parts.length >= 3) { // Minimum required fields
+                        rows.push({
+                            [kannadaHeaders[0]]: parts[0] || '', // ಮನೆ ಸಂಖ್ಯೆ
+                            [kannadaHeaders[1]]: parts[1] || '', // ಮತದಾರರ ಹೆಸರು
+                            [kannadaHeaders[2]]: parts[2] || '', // ಸಂಬಂಧ
+                            [kannadaHeaders[3]]: parts[3] || '', // ಸಂಬಂಧಿಯ ಹೆಸರು
+                            [kannadaHeaders[4]]: parts[4] || '', // ಲಿಂಗ
+                            [kannadaHeaders[5]]: parts[5] || '', // ವಯಸ್ಸು
+                            [kannadaHeaders[6]]: parts[6] || ''  // ಮತದಾರರ ಗುರುತಿನ ಚೀಟಿ ಸಂಖ್ಯೆ
+                        });
+                    }
+                });
+
+                if (rows.length === 0) {
+                    throw new Error('No valid data rows found. Please check your file format.');
+                }
+
+                processedData = rows;
+                displayResults();
+                hideStatus();
+            } catch (error) {
+                showError('Error processing data: ' + error.message);
+                hideStatus();
+            }
+        }
+
+        function displayResults() {
+            const tableBody = document.getElementById('tableBody');
+            const rowCount = document.getElementById('rowCount');
+            
+            tableBody.innerHTML = '';
+            
+            // Show first 50 rows in preview
+            const previewRows = processedData.slice(0, 50);
+            
+            previewRows.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                kannadaHeaders.forEach(header => {
+                    const td = document.createElement('td');
+                    td.className = 'border border-gray-300 px-3 py-2';
+                    td.textContent = row[header] || '';
+                    tr.appendChild(td);
+                });
+                
+                tableBody.appendChild(tr);
+            });
+
+            // Add "more rows" indicator if needed
+            if (processedData.length > 50) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="${kannadaHeaders.length}" class="border border-gray-300 px-3 py-2 text-center text-gray-500 italic">... and ${processedData.length - 50} more rows</td>`;
+                tableBody.appendChild(tr);
+            }
+
+            rowCount.textContent = `${processedData.length} rows`;
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function copyToClipboard() {
+            const headers = kannadaHeaders.join('\t');
+            const rows = processedData.map(row => 
+                kannadaHeaders.map(header => row[header] || '').join('\t')
+            );
+            const fullData = [headers, ...rows].join('\n');
+            
+            navigator.clipboard.writeText(fullData).then(() => {
+                alert('✅ Data copied to clipboard! You can now paste it directly into Excel or Google Sheets.');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = fullData;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('✅ Data copied to clipboard!');
+            });
+        }
+
+        function downloadCSV() {
+            const headers = kannadaHeaders.join(',');
+            const rows = processedData.map(row => 
+                kannadaHeaders.map(header => `"${(row[header] || '').replace(/"/g, '""')}"`).join(',')
+            );
+            const csvContent = [headers, ...rows].join('\n');
+            
+            downloadFile(csvContent, 'voter_data_kannada.csv', 'text/csv');
+        }
+
+        function downloadExcel() {
+            const worksheet = XLSX.utils.json_to_sheet(processedData, { header: kannadaHeaders });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Voter Data');
+            XLSX.writeFile(workbook, 'voter_data_kannada.xlsx');
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function clearInput() {
+            document.getElementById('manualInput').value = '';
+            hideResults();
+            hideError();
+        }
+
+        function showStatus(message) {
+            document.getElementById('statusText').textContent = message;
+            document.getElementById('status').classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            document.getElementById('status').classList.add('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function hideResults() {
+            document.getElementById('results').classList.add('hidden');
+            processedData = [];
+        }
+
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+</body>
+</html>
