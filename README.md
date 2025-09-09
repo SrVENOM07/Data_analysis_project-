@@ -90,14 +90,12 @@ Option 2: GitHub Pages Deployment
 Fork this repository
 Go to Settings → Pages
 Enable GitHub Pages from main branch
-Access via: https://yourusername.github.io/repository-name
+Access via: (https://github.com/SrVENOM07/Data_analysis_project-)
 
-Option 3: Local Development
-bash# Clone the repository
-git clone https://github.com/yourusername/repository-name.git
+
 
 # Navigate to directory
-cd repository-name
+cd Data_analysis_project-
 
 # Open in browser
 open index.html
