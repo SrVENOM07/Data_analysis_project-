@@ -1,4 +1,3 @@
-# Data_analysis_project-
 📄 OCR PDF to Kannada Spreadsheet Converter
 A powerful web-based tool that converts OCR PDFs, text files, and Excel files into structured Kannada voter list format. Perfect for election data processing, voter registration, and administrative tasks.
 🌟 Features
